@@ -32,16 +32,16 @@ pico_sdk_init()
 # Adiciona os arquivos do programa
 add_executable(Coletor_Pixels
     main.c
-    Matriz_Bibliotecas/matriz_led.c   # Mantido para uso futuro
-    Display_Bibliotecas/ssd1306.c
+    libs/Matriz_Bibliotecas/matriz_led.c   # Mantido para uso futuro
+    libs/Display_Bibliotecas/ssd1306.c
     # funcoes_graficas.c # Removido - não fornecido/necessário agora
 )
 
 # Adiciona os diretórios das bibliotecas customizadas ao include path
 target_include_directories(Coletor_Pixels PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/Display_Bibliotecas
-    ${CMAKE_CURRENT_LIST_DIR}/Matriz_Bibliotecas # Mantido para matriz_led.c
-    ${CMAKE_CURRENT_LIST_DIR}/Matriz_Bibliotecas/generated # Para o PIO header
+    ${CMAKE_CURRENT_LIST_DIR}/libs/Display_Bibliotecas
+    ${CMAKE_CURRENT_LIST_DIR}/libs/Matriz_Bibliotecas  # Corrected typo: Matriz instead of atriz
+    ${CMAKE_CURRENT_LIST_DIR}/libs/Matriz_Bibliotecas/generated # For the PIO header
 )
 
 # Gera o cabeçalho PIO para os LEDs WS2812 (Mantido para uso futuro)

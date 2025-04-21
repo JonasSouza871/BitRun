@@ -7,14 +7,15 @@
 #include "hardware/i2c.h"
 #include "hardware/adc.h"
 #include "hardware/pwm.h"
-#include "Display_Bibliotecas/ssd1306.h"
-#include "matriz_led.h"
+#include "libs\Display_Bibliotecas\ssd1306.h"
+#include "libs\Matriz_Bibliotecas\matriz_led.h"
 
 // ─── Definições de Hardware ──────────────────────────────────────────────
 #define PINO_JOYSTICK_X        27  // Pino ADC para eixo X do joystick
 #define PINO_JOYSTICK_Y        26  // Pino ADC para eixo Y do joystick
 #define PINO_BOTAO             6   // Botão B para iniciar/reiniciar
 #define PINO_BOTAO_A           5   // Botão A para pausar/despausar
+#define PINO_BOTAO_JOYSTICK    22  // Botão do joystick para pausar/despausar
 #define BUZZER_A               21  // Buzzer A para coletar pixel
 #define BUZZER_B               10  // Buzzer B para game over
 
@@ -46,6 +47,7 @@ volatile bool jogo_iniciado = false;
 volatile bool jogo_pausado = false;
 static uint32_t ultimo_pulso_ms = 0;
 static uint32_t ultimo_pulso_A_ms = 0;
+static uint32_t ultimo_pulso_joystick_ms = 0; // Adicionado para o botão do joystick
 static uint32_t quadro_splash = 0;
 
 ssd1306_t display;
@@ -103,6 +105,7 @@ static inline int ler_adc(int canal) {
 // Protótipos de funções para callbacks
 void callback_botao_B(uint gpio, uint32_t event);
 void callback_botao_A(uint gpio, uint32_t event);
+void callback_botao_joystick(uint gpio, uint32_t event); // Adicionado para o botão do joystick
 
 // ─── Trata o botão B com debounce ─────────────────────────────────────────
 void callback_botao_B(uint gpio, uint32_t event) {
@@ -133,6 +136,18 @@ void callback_botao_A(uint gpio, uint32_t event) {
     }
 }
 
+// ─── Trata o botão do joystick (Pausa) com debounce ───────────────────────────────────
+void callback_botao_joystick(uint gpio, uint32_t event) {
+    uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
+    if (agora_ms - ultimo_pulso_joystick_ms < 200) return;
+    ultimo_pulso_joystick_ms = agora_ms;
+
+    if (jogo_iniciado && !fim_de_jogo) {
+        jogo_pausado = !jogo_pausado;
+        atualizar_leds();
+    }
+}
+
 void inicializar_botoes() {
     // Inicializa botão B (Start/Restart)
     gpio_init(PINO_BOTAO);
@@ -145,6 +160,12 @@ void inicializar_botoes() {
     gpio_set_dir(PINO_BOTAO_A, GPIO_IN);
     gpio_pull_up(PINO_BOTAO_A);
     gpio_set_irq_enabled_with_callback(PINO_BOTAO_A, GPIO_IRQ_EDGE_FALL, true, callback_botao_A);
+
+    // Inicializa botão do joystick (Pause)
+    gpio_init(PINO_BOTAO_JOYSTICK);
+    gpio_set_dir(PINO_BOTAO_JOYSTICK, GPIO_IN);
+    gpio_pull_up(PINO_BOTAO_JOYSTICK);
+    gpio_set_irq_enabled_with_callback(PINO_BOTAO_JOYSTICK, GPIO_IRQ_EDGE_FALL, true, callback_botao_joystick);
 }
 
 // ─── Desenha retângulo preenchido ────────────────────────────────────────
