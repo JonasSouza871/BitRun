@@ -48,9 +48,25 @@ void enviar_pixel(uint32_t pixel_grb) {
 }
 
 void mostrar_numero_vidas(int vidas) {
-    uint32_t cor = rgb_para_uint32(0, 50, 0); // Cor verde
-    const bool* padrao;
+    // Vamos usar um parâmetro externo para indicar se o jogo está pausado
+    extern volatile bool jogo_pausado;
     
+    uint32_t cor;
+    
+    // Define a cor com base no estado do jogo e no número de vidas
+    if (jogo_pausado) {
+        // Se o jogo estiver pausado, número fica azul
+        cor = rgb_para_uint32(0, 0, 50); // Azul
+    } else if (vidas == 0) {
+        // Se vidas = 0, mostrar em vermelho
+        cor = rgb_para_uint32(50, 0, 0); // Vermelho
+    } else {
+        // Se vidas = 1, 2 ou 3, mostrar em verde
+        cor = rgb_para_uint32(0, 50, 0); // Verde
+    }
+    
+    const bool* padrao;
+     
     // Seleciona o padrão baseado no número de vidas
     switch(vidas) {
         case 3: padrao = numero_3; break;
@@ -59,7 +75,7 @@ void mostrar_numero_vidas(int vidas) {
         case 0: 
         default: padrao = numero_0; break;
     }
-    
+     
     // Exibe o número na matriz LED
     for (int i = 0; i < NUM_PIXELS; i++) {
         enviar_pixel(padrao[i] ? cor : 0);

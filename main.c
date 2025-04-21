@@ -6,6 +6,7 @@
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "hardware/adc.h"
+#include "hardware/pwm.h"
 #include "Display_Bibliotecas/ssd1306.h"
 #include "matriz_led.h"
 
@@ -13,6 +14,14 @@
 #define PINO_JOYSTICK_X        27  // Pino ADC para eixo X do joystick
 #define PINO_JOYSTICK_Y        26  // Pino ADC para eixo Y do joystick
 #define PINO_BOTAO             6   // Botão B para iniciar/reiniciar
+#define PINO_BOTAO_A           5   // Botão A para pausar/despausar
+#define BUZZER_A               21  // Buzzer A para coletar pixel
+#define BUZZER_B               10  // Buzzer B para game over
+
+// ─── Definição dos LEDs de status ──────────────────────────────────────────
+#define LED_VERDE              11  // LED verde indica jogo funcionando
+#define LED_AZUL               12  // LED azul indica jogo pausado
+#define LED_VERMELHO           13  // LED vermelho indica game over
 
 // ─── Configurações do Display OLED ──────────────────────────────────────
 #define LARGURA_TELA           128
@@ -34,7 +43,9 @@
 
 // ─── Variáveis Globais ─────────────────────────────────────────────────
 volatile bool jogo_iniciado = false;
+volatile bool jogo_pausado = false;
 static uint32_t ultimo_pulso_ms = 0;
+static uint32_t ultimo_pulso_A_ms = 0;
 static uint32_t quadro_splash = 0;
 
 ssd1306_t display;
@@ -45,14 +56,60 @@ int vidas = MAX_VIDAS;
 bool fim_de_jogo = false;
 int centro_x = 2048, centro_y = 2048;  // Médias do joystick após calibração
 
+// ─── Funções para controle dos LEDs ───────────────────────────────────────
+void inicializar_leds() {
+    // Inicializa os três LEDs como saída
+    gpio_init(LED_VERDE);
+    gpio_init(LED_AZUL);
+    gpio_init(LED_VERMELHO);
+
+    gpio_set_dir(LED_VERDE, GPIO_OUT);
+    gpio_set_dir(LED_AZUL, GPIO_OUT);
+    gpio_set_dir(LED_VERMELHO, GPIO_OUT);
+
+    // Começa com todos os LEDs desligados
+    gpio_put(LED_VERDE, 0);
+    gpio_put(LED_AZUL, 0);
+    gpio_put(LED_VERMELHO, 0);
+}
+
+void atualizar_leds() {
+    // Atualiza os LEDs com base no estado atual do jogo
+    if (fim_de_jogo) {
+        // Game over - LED vermelho ligado, outros desligados
+        gpio_put(LED_VERMELHO, 1);
+        gpio_put(LED_VERDE, 0);
+        gpio_put(LED_AZUL, 0);
+    } else if (jogo_pausado) {
+        // Jogo pausado - LED azul ligado, outros desligados
+        gpio_put(LED_VERMELHO, 0);
+        gpio_put(LED_VERDE, 0);
+        gpio_put(LED_AZUL, 1);
+    } else if (jogo_iniciado) {
+        // Jogo em andamento - LED verde ligado, outros desligados
+        gpio_put(LED_VERMELHO, 0);
+        gpio_put(LED_VERDE, 1);
+        gpio_put(LED_AZUL, 0);
+    } else {
+        // Tela inicial ou estado indefinido - todos desligados
+        gpio_put(LED_VERMELHO, 0);
+        gpio_put(LED_VERDE, 0);
+        gpio_put(LED_AZUL, 0);
+    }
+}
+
 // ─── Função de Leitura ADC ─────────────────────────────────────────────────
 static inline int ler_adc(int canal) {
     adc_select_input(canal);
     return adc_read();
 }
 
+// Protótipos de funções para callbacks
+void callback_botao_B(uint gpio, uint32_t event);
+void callback_botao_A(uint gpio, uint32_t event);
+
 // ─── Trata o botão B com debounce ─────────────────────────────────────────
-void callback_botao(uint gpio, uint32_t event) {
+void callback_botao_B(uint gpio, uint32_t event) {
     uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
     if (agora_ms - ultimo_pulso_ms < 200) return;
     ultimo_pulso_ms = agora_ms;
@@ -60,18 +117,29 @@ void callback_botao(uint gpio, uint32_t event) {
     if (fim_de_jogo) {
         // Reinicia o jogo após Game Over
         fim_de_jogo = false;
-        vidas = MAX_VIDAS;
-        pontuacao = 0;
-        pos_jogador_x = (LARGURA_TELA - TAM_JOGADOR) / 2;
-        pos_jogador_y = (ALTURA_TELA - TAM_JOGADOR) / 2;
-        pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
-        pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+        jogo_iniciado = true;  // Garante que o jogo reinicie
+        atualizar_leds();  // Atualiza os LEDs quando o estado muda
     } else if (!jogo_iniciado) {
         jogo_iniciado = true;
+        atualizar_leds();  // Atualiza os LEDs ao iniciar o jogo
     }
 }
 
-void init_botao() {
+// ─── Trata o botão A (Pausa) com debounce ───────────────────────────────────
+void callback_botao_A(uint gpio, uint32_t event) {
+    uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
+    if (agora_ms - ultimo_pulso_A_ms < 200) return;  // Debounce de 200ms
+    ultimo_pulso_A_ms = agora_ms;
+
+    // Só alterna a pausa quando o jogo está efetivamente em execução
+    if (jogo_iniciado && !fim_de_jogo) {
+        jogo_pausado = !jogo_pausado;  // Alterna entre pausado e despausado
+        atualizar_leds();  // Atualiza os LEDs quando muda o estado de pausa
+    }
+}
+
+void init_botoes() {
+    // Inicializa botão B (Start/Restart)
     gpio_init(PINO_BOTAO);
     gpio_set_dir(PINO_BOTAO, GPIO_IN);
     gpio_pull_up(PINO_BOTAO);
@@ -79,7 +147,18 @@ void init_botao() {
         PINO_BOTAO,
         GPIO_IRQ_EDGE_FALL,
         true,
-        callback_botao
+        callback_botao_B
+    );
+
+    // Inicializa botão A (Pause)
+    gpio_init(PINO_BOTAO_A);
+    gpio_set_dir(PINO_BOTAO_A, GPIO_IN);
+    gpio_pull_up(PINO_BOTAO_A);
+    gpio_set_irq_enabled_with_callback(
+        PINO_BOTAO_A,
+        GPIO_IRQ_EDGE_FALL,
+        true,
+        callback_botao_A
     );
 }
 
@@ -152,6 +231,15 @@ void tela_inicial() {
     ssd1306_send_data(&display);
 }
 
+// ─── Tela de pausa ────────────────────────────────────────────────────────
+void tela_pausa() {
+    ssd1306_fill(&display, false);
+    ssd1306_draw_string(&display, "JOGO PAUSADO", (LARGURA_TELA-12*6)/2, 20, false);
+    ssd1306_draw_string(&display, "A Continuar", (LARGURA_TELA-12*6)/2, ALTURA_TELA-20, false);
+    ssd1306_send_data(&display);
+    desenhar_vidas();
+}
+
 // ─── Tela de Game Over ──────────────────────────────────────────────────
 void tela_game_over() {
     ssd1306_fill(&display, false);
@@ -161,6 +249,46 @@ void tela_game_over() {
     ssd1306_draw_string(&display, buf, (LARGURA_TELA-strlen(buf)*6)/2, 32, false);
     ssd1306_draw_string(&display, "[B] Reinicia", (LARGURA_TELA-11*6)/2, ALTURA_TELA-16, false);
     ssd1306_send_data(&display);
+}
+
+// ─── Funções para controle dos buzzers ───────────────────────────────────────
+void inicializar_buzzers() {
+    // Inicializa os pinos dos buzzers como saída
+    gpio_init(BUZZER_A);
+    gpio_init(BUZZER_B);
+    gpio_set_dir(BUZZER_A, GPIO_OUT);
+    gpio_set_dir(BUZZER_B, GPIO_OUT);
+    gpio_put(BUZZER_A, 0);
+    gpio_put(BUZZER_B, 0);
+}
+
+void tocar_som_pixel() {
+    // Toca um som curto e agudo no buzzer A
+    for (int i = 0; i < 100; i++) {
+        gpio_put(BUZZER_A, 1);
+        sleep_us(500);
+        gpio_put(BUZZER_A, 0);
+        sleep_us(500);
+    }
+}
+
+void tocar_som_game_over() {
+    // Toca um som longo e grave no buzzer B
+    for (int i = 0; i < 500; i++) {
+        gpio_put(BUZZER_B, 1);
+        sleep_us(1000);
+        gpio_put(BUZZER_B, 0);
+        sleep_us(1000);
+    }
+}
+
+// ─── Função para imprimir o estado do jogo no monitor serial ────────────────
+void imprimir_estado_jogo() {
+    int raw_x = ler_adc(1);
+    int raw_y = ler_adc(0);
+    const char* game_state = jogo_pausado ? "Pausado" : (fim_de_jogo ? "Game Over" : "Jogando");
+    printf("Joystick X: %d, Joystick Y: %d, Posição Jogador: (%d, %d), Estado: %s, Pontuação: %d, Vidas: %d\n",
+           raw_x, raw_y, pos_jogador_x, pos_jogador_y, game_state, pontuacao, vidas);
 }
 
 // ─── Inicia o jogo após START ───────────────────────────────────────────
@@ -181,17 +309,49 @@ void iniciar_jogo() {
     pontuacao = 0;
     vidas = MAX_VIDAS;
     fim_de_jogo = false;
+    jogo_pausado = false;  // Garante que o jogo começa despausado
+
+    // Atualizar LEDs para o estado de jogo em andamento
+    atualizar_leds();
+
+    // Define a região onde os pixels aleatórios não podem aparecer
+    int area_pontos_x = 2;
+    int area_pontos_y = 2;
+    int area_pontos_w = 50;
+    int area_pontos_h = 10;
+
     pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
     pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+
+    // Verifica se o pixel aleatório está na área de "Pontos" e reposiciona se necessário
+    while (colisao(pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL, area_pontos_x, area_pontos_y, area_pontos_w, area_pontos_h)) {
+        pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
+        pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+    }
 
     uint32_t tempo_imune = 0;
     const uint32_t dur_imune = 1500;
     bool pisca_jogador = false;
+    uint32_t ultimo_impressao_ms = 0;
 
     while (!fim_de_jogo) {
+        uint32_t agora = to_ms_since_boot(get_absolute_time());
+
+        // Verifica se o jogo está pausado e atualiza LEDs se necessário
+        if (jogo_pausado) {
+            tela_pausa();
+            sleep_ms(50);
+            continue;  // Pula o resto do loop enquanto pausado
+        }
+
+        // Imprime o estado do jogo a cada segundo
+        if (agora - ultimo_impressao_ms >= 1000) {
+            imprimir_estado_jogo();
+            ultimo_impressao_ms = agora;
+        }
+
         int raw_x = ler_adc(1);
         int raw_y = ler_adc(0);
-        uint32_t agora = to_ms_since_boot(get_absolute_time());
 
         // Reseta imunidade após duração
         if (tempo_imune > 0 && agora >= tempo_imune) {
@@ -213,6 +373,10 @@ void iniciar_jogo() {
             if (vidas <= 0) {
                 fim_de_jogo = true;
                 desligar_matriz();
+                // Atualiza LEDs para game over (vermelho)
+                atualizar_leds();
+                // Toca o som de game over
+                tocar_som_game_over();
                 break;
             }
             tempo_imune = agora + dur_imune;
@@ -230,6 +394,15 @@ void iniciar_jogo() {
             pontuacao++;
             pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
             pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+
+            // Verifica se o novo pixel aleatório está na área de "Pontos" e reposiciona se necessário
+            while (colisao(pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL, area_pontos_x, area_pontos_y, area_pontos_w, area_pontos_h)) {
+                pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
+                pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+            }
+
+            // Toca o som de coleta de pixel
+            tocar_som_pixel();
         }
 
         ssd1306_fill(&display, false);
@@ -248,6 +421,18 @@ void iniciar_jogo() {
         tela_game_over();
         mostrar_numero_vidas(0);
         sleep_ms(50);
+
+        // Verifica manualmente o botão B se a interrupção não estiver funcionando
+        if (gpio_get(PINO_BOTAO) == 0) { // Se o botão estiver pressionado (ativo em baixo)
+            uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
+            if (agora_ms - ultimo_pulso_ms > 200) {
+                ultimo_pulso_ms = agora_ms;
+                fim_de_jogo = false;
+                jogo_iniciado = true;  // Garante que o jogo reinicie
+                // Atualiza LEDs para o novo estado
+                atualizar_leds();
+            }
+        }
     }
 }
 
@@ -264,13 +449,36 @@ int main() {
     ssd1306_init(&display, LARGURA_TELA, ALTURA_TELA, false, ENDERECO_OLED, I2C_PORT);
     ssd1306_config(&display);
     inicializar_matriz_led();
-    init_botao();
+
+    // Inicializa os LEDs de status
+    inicializar_leds();
+
+    // Inicializa os buzzers
+    inicializar_buzzers();
+
+    // Inicializa ambos os botões com um único sistema de interrupção
+    init_botoes();
+
+    // Loop principal para tela inicial
     while (!jogo_iniciado) {
         tela_inicial();
         mostrar_numero_vidas(MAX_VIDAS);
-        tight_loop_contents();
+        atualizar_leds();  // Garante que os LEDs estão no estado correto na tela inicial
+
+        // Verifica manualmente o botão B se a interrupção não estiver funcionando
+        if (gpio_get(PINO_BOTAO) == 0) { // Se o botão estiver pressionado (ativo em baixo)
+            uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
+            if (agora_ms - ultimo_pulso_ms > 200) {
+                ultimo_pulso_ms = agora_ms;
+                jogo_iniciado = true;
+                // Atualiza LEDs para o novo estado
+                atualizar_leds();
+            }
+        }
+
         sleep_ms(30);
     }
+
     while (1) iniciar_jogo();
     return 0;
 }

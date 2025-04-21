@@ -58,7 +58,7 @@ target_link_libraries(Coletor_Pixels PRIVATE
     hardware_i2c     # Suporte para comunicação I2C (Display)
     hardware_adc     # Suporte para ADC (Joystick)
     hardware_pio     # Suporte para PIO (Mantido para Matriz WS2812 futura)
-    # hardware_pwm   # Removido - não usado atualmente
+    hardware_pwm   # Removido - não usado atualmente
     m                # Biblioteca matemática (pode ser útil)
 )
 
