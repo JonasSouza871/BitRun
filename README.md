@@ -78,6 +78,9 @@ BitRun é um jogo simples de coleta de pixels desenvolvido para a placa Raspberr
 
 > ⚠️ **Atenção:** Verifique a pinagem exata dos seus componentes (OLED, Joystick) e a necessidade de níveis lógicos (3.3V do Pico).
 
+ ![image](https://github.com/user-attachments/assets/37966e92-99bc-4c9d-aeac-f80c1e2e9524)
+
+
 ---
 
 ## 💡 Aplicações e Casos de Uso
