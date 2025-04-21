@@ -45,7 +45,7 @@ target_include_directories(Coletor_Pixels PRIVATE
 )
 
 # Gera o cabeçalho PIO para os LEDs WS2812 (Mantido para uso futuro)
-pico_generate_pio_header(Coletor_Pixels ${CMAKE_CURRENT_LIST_DIR}/ws2812.pio)
+
 # A inclusão do diretório gerado já está feita acima em target_include_directories
 
 # Habilita comunicação serial
