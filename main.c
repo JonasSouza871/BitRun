@@ -47,7 +47,7 @@ volatile bool jogo_iniciado = false;
 volatile bool jogo_pausado = false;
 static uint32_t ultimo_pulso_ms = 0;
 static uint32_t ultimo_pulso_A_ms = 0;
-static uint32_t ultimo_pulso_joystick_ms = 0; // Adicionado para o botão do joystick
+static uint32_t ultimo_pulso_joystick_ms = 0;
 static uint32_t quadro_splash = 0;
 
 ssd1306_t display;
@@ -105,7 +105,7 @@ static inline int ler_adc(int canal) {
 // Protótipos de funções para callbacks
 void callback_botao_B(uint gpio, uint32_t event);
 void callback_botao_A(uint gpio, uint32_t event);
-void callback_botao_joystick(uint gpio, uint32_t event); // Adicionado para o botão do joystick
+void callback_botao_joystick(uint gpio, uint32_t event);
 
 // ─── Trata o botão B com debounce ─────────────────────────────────────────
 void callback_botao_B(uint gpio, uint32_t event) {
