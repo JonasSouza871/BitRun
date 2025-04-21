@@ -72,7 +72,7 @@ BitRun é um jogo simples de coleta de pixels desenvolvido para a placa Raspberr
 | LED Verde Anodo (+)   | GP11      | Saída Digital via Resistor     |
 | LED Azul Anodo (+)    | GP12      | Saída Digital via Resistor     |
 | LED Vermelho Anodo (+)| GP13      | Saída Digital via Resistor     |
-| LEDs Catodo (-)       | GND       | Terra (via Resistor)           |
+| LEDs Catodo (-)       | GND       | Terra          |
 
 *Nota sobre WS2812:* A alimentação da matriz (especialmente 5x5) pode exigir mais corrente do que o pino 3V3 do Pico pode fornecer. É recomendável alimentá-la diretamente pela fonte USB (VBUS) ou uma fonte externa de 5V, garantindo um GND comum com o Pico.
 
