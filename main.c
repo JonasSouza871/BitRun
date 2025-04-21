@@ -33,12 +33,12 @@
 #define I2C_FREQUENCIA         400000
 
 // ─── Parâmetros do Jogo ─────────────────────────────────────────────────
-#define TAM_JOGADOR            8    // Tamanho do quadrado do jogador em px
-#define TAM_PIXEL              4    // Tamanho do "pixel" que o jogador coleta
-#define BORDAS                2     // Espessura da borda da área de jogo
+#define TAMANHO_JOGADOR        8    // Tamanho do quadrado do jogador em px
+#define TAMANHO_PIXEL          4    // Tamanho do "pixel" que o jogador coleta
+#define BORDAS                 2    // Espessura da borda da área de jogo
 #define ZONA_MORTA            200   // Margem sem movimento no joystick (ADC)
 #define VELOCIDADE            2     // Velocidade do jogador em px por quadro
-#define TEMPO_CALIBRAGEM_MS  2000   // Tempo de calibração inicial em ms
+#define TEMPO_CALIBRAGEM_MS   2000  // Tempo de calibração inicial em ms
 #define MAX_VIDAS             3     // Vidas iniciais
 
 // ─── Variáveis Globais ─────────────────────────────────────────────────
@@ -49,8 +49,8 @@ static uint32_t ultimo_pulso_A_ms = 0;
 static uint32_t quadro_splash = 0;
 
 ssd1306_t display;
-int pos_jogador_x, pos_jogador_y;
-int pos_pixel_x, pos_pixel_y;
+int posicao_jogador_x, posicao_jogador_y;
+int posicao_pixel_x, posicao_pixel_y;
 int pontuacao = 0;
 int vidas = MAX_VIDAS;
 bool fim_de_jogo = false;
@@ -76,22 +76,18 @@ void inicializar_leds() {
 void atualizar_leds() {
     // Atualiza os LEDs com base no estado atual do jogo
     if (fim_de_jogo) {
-        // Game over - LED vermelho ligado, outros desligados
         gpio_put(LED_VERMELHO, 1);
         gpio_put(LED_VERDE, 0);
         gpio_put(LED_AZUL, 0);
     } else if (jogo_pausado) {
-        // Jogo pausado - LED azul ligado, outros desligados
         gpio_put(LED_VERMELHO, 0);
         gpio_put(LED_VERDE, 0);
         gpio_put(LED_AZUL, 1);
     } else if (jogo_iniciado) {
-        // Jogo em andamento - LED verde ligado, outros desligados
         gpio_put(LED_VERMELHO, 0);
         gpio_put(LED_VERDE, 1);
         gpio_put(LED_AZUL, 0);
     } else {
-        // Tela inicial ou estado indefinido - todos desligados
         gpio_put(LED_VERMELHO, 0);
         gpio_put(LED_VERDE, 0);
         gpio_put(LED_AZUL, 0);
@@ -117,87 +113,78 @@ void callback_botao_B(uint gpio, uint32_t event) {
     if (fim_de_jogo) {
         // Reinicia o jogo após Game Over
         fim_de_jogo = false;
-        jogo_iniciado = true;  // Garante que o jogo reinicie
-        atualizar_leds();  // Atualiza os LEDs quando o estado muda
+        jogo_iniciado = true;
+        atualizar_leds();
     } else if (!jogo_iniciado) {
         jogo_iniciado = true;
-        atualizar_leds();  // Atualiza os LEDs ao iniciar o jogo
+        atualizar_leds();
     }
 }
 
 // ─── Trata o botão A (Pausa) com debounce ───────────────────────────────────
 void callback_botao_A(uint gpio, uint32_t event) {
     uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
-    if (agora_ms - ultimo_pulso_A_ms < 200) return;  // Debounce de 200ms
+    if (agora_ms - ultimo_pulso_A_ms < 200) return;
     ultimo_pulso_A_ms = agora_ms;
 
-    // Só alterna a pausa quando o jogo está efetivamente em execução
     if (jogo_iniciado && !fim_de_jogo) {
-        jogo_pausado = !jogo_pausado;  // Alterna entre pausado e despausado
-        atualizar_leds();  // Atualiza os LEDs quando muda o estado de pausa
+        jogo_pausado = !jogo_pausado;
+        atualizar_leds();
     }
 }
 
-void init_botoes() {
+void inicializar_botoes() {
     // Inicializa botão B (Start/Restart)
     gpio_init(PINO_BOTAO);
     gpio_set_dir(PINO_BOTAO, GPIO_IN);
     gpio_pull_up(PINO_BOTAO);
-    gpio_set_irq_enabled_with_callback(
-        PINO_BOTAO,
-        GPIO_IRQ_EDGE_FALL,
-        true,
-        callback_botao_B
-    );
+    gpio_set_irq_enabled_with_callback(PINO_BOTAO, GPIO_IRQ_EDGE_FALL, true, callback_botao_B);
 
     // Inicializa botão A (Pause)
     gpio_init(PINO_BOTAO_A);
     gpio_set_dir(PINO_BOTAO_A, GPIO_IN);
     gpio_pull_up(PINO_BOTAO_A);
-    gpio_set_irq_enabled_with_callback(
-        PINO_BOTAO_A,
-        GPIO_IRQ_EDGE_FALL,
-        true,
-        callback_botao_A
-    );
+    gpio_set_irq_enabled_with_callback(PINO_BOTAO_A, GPIO_IRQ_EDGE_FALL, true, callback_botao_A);
 }
 
 // ─── Desenha retângulo preenchido ────────────────────────────────────────
-void desenhar_retangulo(ssd1306_t *d, int x, int y, int w, int h) {
-    for (int i = x; i < x + w; i++)
-        for (int j = y; j < y + h; j++)
-            ssd1306_pixel(d, i, j, true);
+void desenhar_retangulo(ssd1306_t *display, int x, int y, int largura, int altura) {
+    for (int i = x; i < x + largura; i++) {
+        for (int j = y; j < y + altura; j++) {
+            ssd1306_pixel(display, i, j, true);
+        }
+    }
 }
 
 // ─── Desenha somente a borda ─────────────────────────────────────────────
-void desenhar_borda(ssd1306_t *d, int x, int y, int w, int h, int esp) {
-    for (int i = x; i < x + w; i++) {
-        ssd1306_pixel(d, i, y, true);
-        ssd1306_pixel(d, i, y + h - 1, true);
+void desenhar_borda(ssd1306_t *display, int x, int y, int largura, int altura, int espessura) {
+    for (int i = x; i < x + largura; i++) {
+        ssd1306_pixel(display, i, y, true);
+        ssd1306_pixel(display, i, y + altura - 1, true);
     }
-    for (int j = y; j < y + h; j++) {
-        ssd1306_pixel(d, x, j, true);
-        ssd1306_pixel(d, x + w - 1, j, true);
+    for (int j = y; j < y + altura; j++) {
+        ssd1306_pixel(display, x, j, true);
+        ssd1306_pixel(display, x + largura - 1, j, true);
     }
 }
 
 // ─── Verifica colisão entre dois retângulos ───────────────────────────────
-bool colisao(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
-    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+bool verificar_colisao(int ax, int ay, int largura_a, int altura_a, int bx, int by, int largura_b, int altura_b) {
+    // Verifica se há sobreposição nos eixos X e Y
+    return ax < bx + largura_b && ax + largura_a > bx && ay < by + altura_b && ay + altura_a > by;
 }
 
 // ─── Verifica colisão com as bordas da tela ───────────────────────────────
-bool bateu_borda(int x, int y, int w, int h) {
-    return x < BORDAS || y < BORDAS ||
-           x + w > LARGURA_TELA - BORDAS ||
-           y + h > ALTURA_TELA - BORDAS;
+bool verificar_colisao_borda(int x, int y, int largura, int altura) {
+    // Verifica se o retângulo ultrapassa as bordas da tela
+    return x < BORDAS || y < BORDAS || x + largura > LARGURA_TELA - BORDAS || y + altura > ALTURA_TELA - BORDAS;
 }
 
 // ─── Mostra pontuação e vidas no OLED ────────────────────────────────────
 void desenhar_pontuacao() {
-    char buf[20];
-    sprintf(buf, "Pontos: %d", pontuacao);
-    ssd1306_draw_string(&display, buf, 2, 2, false);
+    char buffer[20];
+    sprintf(buffer, "Pontos: %d", pontuacao);
+    ssd1306_draw_string(&display, buffer, 2, 2, false);
 }
 
 void desenhar_vidas() {
@@ -208,25 +195,27 @@ void desenhar_vidas() {
 void tela_inicial() {
     quadro_splash++;
     bool pisca = ((quadro_splash / 30) % 2) == 0;
-    int offset = (quadro_splash / 20) % 4;
+    int deslocamento = (quadro_splash / 20) % 4;
 
     ssd1306_fill(&display, false);
     ssd1306_pixel(&display, 5, 5, true);
-    ssd1306_pixel(&display, LARGURA_TELA-6, 5, true);
-    ssd1306_pixel(&display, 5, ALTURA_TELA-6, true);
-    ssd1306_pixel(&display, LARGURA_TELA-6, ALTURA_TELA-6, true);
-    for (int i = offset; i < LARGURA_TELA-offset; i++) {
-        ssd1306_pixel(&display, i, offset, true);
-        ssd1306_pixel(&display, i, ALTURA_TELA-1-offset, true);
+    ssd1306_pixel(&display, LARGURA_TELA - 6, 5, true);
+    ssd1306_pixel(&display, 5, ALTURA_TELA - 6, true);
+    ssd1306_pixel(&display, LARGURA_TELA - 6, ALTURA_TELA - 6, true);
+
+    for (int i = deslocamento; i < LARGURA_TELA - deslocamento; i++) {
+        ssd1306_pixel(&display, i, deslocamento, true);
+        ssd1306_pixel(&display, i, ALTURA_TELA - 1 - deslocamento, true);
     }
-    for (int j = offset; j < ALTURA_TELA-offset; j++) {
-        ssd1306_pixel(&display, offset, j, true);
-        ssd1306_pixel(&display, LARGURA_TELA-1-offset, j, true);
+    for (int j = deslocamento; j < ALTURA_TELA - deslocamento; j++) {
+        ssd1306_pixel(&display, deslocamento, j, true);
+        ssd1306_pixel(&display, LARGURA_TELA - 1 - deslocamento, j, true);
     }
-    ssd1306_draw_string(&display, "BitRun", (LARGURA_TELA-6*6)/2, 12, false);
+
+    ssd1306_draw_string(&display, "BitRun", (LARGURA_TELA - 6 * 6) / 2, 12, false);
     if (pisca) {
-        ssd1306_draw_string(&display, "[B] START", (LARGURA_TELA-7*6)/2, ALTURA_TELA-18, false);
-        ssd1306_draw_string(&display, ">", (LARGURA_TELA-7*6)/2 - 8, ALTURA_TELA-18, false);
+        ssd1306_draw_string(&display, "[B] START", (LARGURA_TELA - 7 * 6) / 2, ALTURA_TELA - 18, false);
+        ssd1306_draw_string(&display, ">", (LARGURA_TELA - 7 * 6) / 2 - 8, ALTURA_TELA - 18, false);
     }
     ssd1306_send_data(&display);
 }
@@ -234,8 +223,8 @@ void tela_inicial() {
 // ─── Tela de pausa ────────────────────────────────────────────────────────
 void tela_pausa() {
     ssd1306_fill(&display, false);
-    ssd1306_draw_string(&display, "JOGO PAUSADO", (LARGURA_TELA-12*6)/2, 20, false);
-    ssd1306_draw_string(&display, "A Continuar", (LARGURA_TELA-12*6)/2, ALTURA_TELA-20, false);
+    ssd1306_draw_string(&display, "JOGO PAUSADO", (LARGURA_TELA - 12 * 6) / 2, 20, false);
+    ssd1306_draw_string(&display, "A Continuar", (LARGURA_TELA - 12 * 6) / 2, ALTURA_TELA - 20, false);
     ssd1306_send_data(&display);
     desenhar_vidas();
 }
@@ -243,11 +232,11 @@ void tela_pausa() {
 // ─── Tela de Game Over ──────────────────────────────────────────────────
 void tela_game_over() {
     ssd1306_fill(&display, false);
-    ssd1306_draw_string(&display, "GAME OVER", (LARGURA_TELA-9*6)/2, 16, false);
-    char buf[20];
-    sprintf(buf, "Pontos: %d", pontuacao);
-    ssd1306_draw_string(&display, buf, (LARGURA_TELA-strlen(buf)*6)/2, 32, false);
-    ssd1306_draw_string(&display, "[B] Reinicia", (LARGURA_TELA-11*6)/2, ALTURA_TELA-16, false);
+    ssd1306_draw_string(&display, "GAME OVER", (LARGURA_TELA - 9 * 6) / 2, 16, false);
+    char buffer[20];
+    sprintf(buffer, "Pontos: %d", pontuacao);
+    ssd1306_draw_string(&display, buffer, (LARGURA_TELA - strlen(buffer) * 6) / 2, 32, false);
+    ssd1306_draw_string(&display, "[B] Reinicia", (LARGURA_TELA - 11 * 6) / 2, ALTURA_TELA - 16, false);
     ssd1306_send_data(&display);
 }
 
@@ -284,74 +273,74 @@ void tocar_som_game_over() {
 
 // ─── Função para imprimir o estado do jogo no monitor serial ────────────────
 void imprimir_estado_jogo() {
-    int raw_x = ler_adc(1);
-    int raw_y = ler_adc(0);
-    const char* game_state = jogo_pausado ? "Pausado" : (fim_de_jogo ? "Game Over" : "Jogando");
+    int valor_x = ler_adc(1);
+    int valor_y = ler_adc(0);
+    const char* estado_jogo = jogo_pausado ? "Pausado" : (fim_de_jogo ? "Game Over" : "Jogando");
     printf("Joystick X: %d, Joystick Y: %d, Posição Jogador: (%d, %d), Estado: %s, Pontuação: %d, Vidas: %d\n",
-           raw_x, raw_y, pos_jogador_x, pos_jogador_y, game_state, pontuacao, vidas);
+           valor_x, valor_y, posicao_jogador_x, posicao_jogador_y, estado_jogo, pontuacao, vidas);
 }
 
 // ─── Inicia o jogo após START ───────────────────────────────────────────
 void iniciar_jogo() {
     uint32_t inicio = to_ms_since_boot(get_absolute_time());
-    int soma_x = 0, soma_y = 0, cont = 0;
+    int soma_x = 0, soma_y = 0, contador = 0;
+
+    // Calibração inicial do joystick
     while (to_ms_since_boot(get_absolute_time()) - inicio < TEMPO_CALIBRAGEM_MS) {
         soma_x += ler_adc(1);
         soma_y += ler_adc(0);
-        cont++;
+        contador++;
         sleep_ms(5);
     }
-    centro_x = soma_x / cont;
-    centro_y = soma_y / cont;
 
-    pos_jogador_x = (LARGURA_TELA - TAM_JOGADOR) / 2;
-    pos_jogador_y = (ALTURA_TELA - TAM_JOGADOR) / 2;
+    // Calcula a média dos valores lidos para centralizar o joystick
+    centro_x = soma_x / contador;
+    centro_y = soma_y / contador;
+
+    posicao_jogador_x = (LARGURA_TELA - TAMANHO_JOGADOR) / 2;
+    posicao_jogador_y = (ALTURA_TELA - TAMANHO_JOGADOR) / 2;
     pontuacao = 0;
     vidas = MAX_VIDAS;
     fim_de_jogo = false;
-    jogo_pausado = false;  // Garante que o jogo começa despausado
+    jogo_pausado = false;
 
-    // Atualizar LEDs para o estado de jogo em andamento
     atualizar_leds();
 
-    // Define a região onde os pixels aleatórios não podem aparecer
     int area_pontos_x = 2;
     int area_pontos_y = 2;
-    int area_pontos_w = 50;
-    int area_pontos_h = 10;
+    int area_pontos_largura = 50;
+    int area_pontos_altura = 10;
 
-    pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
-    pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+    // Posiciona o pixel aleatoriamente, evitando a área de pontos
+    posicao_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
+    posicao_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
 
-    // Verifica se o pixel aleatório está na área de "Pontos" e reposiciona se necessário
-    while (colisao(pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL, area_pontos_x, area_pontos_y, area_pontos_w, area_pontos_h)) {
-        pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
-        pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+    while (verificar_colisao(posicao_pixel_x, posicao_pixel_y, TAMANHO_PIXEL, TAMANHO_PIXEL, area_pontos_x, area_pontos_y, area_pontos_largura, area_pontos_altura)) {
+        posicao_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
+        posicao_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
     }
 
     uint32_t tempo_imune = 0;
-    const uint32_t dur_imune = 1500;
+    const uint32_t duracao_imune = 1500;
     bool pisca_jogador = false;
     uint32_t ultimo_impressao_ms = 0;
 
     while (!fim_de_jogo) {
         uint32_t agora = to_ms_since_boot(get_absolute_time());
 
-        // Verifica se o jogo está pausado e atualiza LEDs se necessário
         if (jogo_pausado) {
             tela_pausa();
             sleep_ms(50);
-            continue;  // Pula o resto do loop enquanto pausado
+            continue;
         }
 
-        // Imprime o estado do jogo a cada segundo
         if (agora - ultimo_impressao_ms >= 1000) {
             imprimir_estado_jogo();
             ultimo_impressao_ms = agora;
         }
 
-        int raw_x = ler_adc(1);
-        int raw_y = ler_adc(0);
+        int valor_x = ler_adc(1);
+        int valor_y = ler_adc(0);
 
         // Reseta imunidade após duração
         if (tempo_imune > 0 && agora >= tempo_imune) {
@@ -359,57 +348,56 @@ void iniciar_jogo() {
         }
 
         int dx = 0, dy = 0;
-        if (raw_x > centro_x + ZONA_MORTA) dx = VELOCIDADE;
-        else if (raw_x < centro_x - ZONA_MORTA) dx = -VELOCIDADE;
-        if (raw_y > centro_y + ZONA_MORTA) dy = -VELOCIDADE;
-        else if (raw_y < centro_y - ZONA_MORTA) dy = VELOCIDADE;
+        // Movimento no eixo X
+        if (valor_x > centro_x + ZONA_MORTA) dx = VELOCIDADE;
+        else if (valor_x < centro_x - ZONA_MORTA) dx = -VELOCIDADE;
+        // Movimento no eixo Y
+        if (valor_y > centro_y + ZONA_MORTA) dy = -VELOCIDADE;
+        else if (valor_y < centro_y - ZONA_MORTA) dy = VELOCIDADE;
 
-        int nova_x = pos_jogador_x + dx;
-        int nova_y = pos_jogador_y + dy;
+        int nova_posicao_x = posicao_jogador_x + dx;
+        int nova_posicao_y = posicao_jogador_y + dy;
 
-        // Colisão com borda (sem imunidade)
-        if (tempo_imune == 0 && bateu_borda(nova_x, nova_y, TAM_JOGADOR, TAM_JOGADOR)) {
+        // Verifica colisão com borda (sem imunidade)
+        if (tempo_imune == 0 && verificar_colisao_borda(nova_posicao_x, nova_posicao_y, TAMANHO_JOGADOR, TAMANHO_JOGADOR)) {
             vidas--;
             if (vidas <= 0) {
                 fim_de_jogo = true;
                 desligar_matriz();
-                // Atualiza LEDs para game over (vermelho)
                 atualizar_leds();
-                // Toca o som de game over
                 tocar_som_game_over();
                 break;
             }
-            tempo_imune = agora + dur_imune;
+            tempo_imune = agora + duracao_imune;
         }
 
-        // Move o jogador
-        if (!bateu_borda(nova_x, nova_y, TAM_JOGADOR, TAM_JOGADOR) || tempo_imune > 0) {
-            pos_jogador_x = nova_x;
-            pos_jogador_y = nova_y;
+        // Move o jogador se não houver colisão ou se estiver imune
+        if (!verificar_colisao_borda(nova_posicao_x, nova_posicao_y, TAMANHO_JOGADOR, TAMANHO_JOGADOR) || tempo_imune > 0) {
+            posicao_jogador_x = nova_posicao_x;
+            posicao_jogador_y = nova_posicao_y;
         }
 
-        // Coleta pixel?
-        if (colisao(pos_jogador_x, pos_jogador_y, TAM_JOGADOR, TAM_JOGADOR,
-                   pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL)) {
+        // Verifica se o jogador coletou o pixel
+        if (verificar_colisao(posicao_jogador_x, posicao_jogador_y, TAMANHO_JOGADOR, TAMANHO_JOGADOR,
+                              posicao_pixel_x, posicao_pixel_y, TAMANHO_PIXEL, TAMANHO_PIXEL)) {
             pontuacao++;
-            pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
-            pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+            // Reposiciona o pixel aleatoriamente, evitando a área de pontos
+            posicao_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
+            posicao_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
 
-            // Verifica se o novo pixel aleatório está na área de "Pontos" e reposiciona se necessário
-            while (colisao(pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL, area_pontos_x, area_pontos_y, area_pontos_w, area_pontos_h)) {
-                pos_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2*BORDAS - TAM_PIXEL);
-                pos_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2*BORDAS - TAM_PIXEL);
+            while (verificar_colisao(posicao_pixel_x, posicao_pixel_y, TAMANHO_PIXEL, TAMANHO_PIXEL, area_pontos_x, area_pontos_y, area_pontos_largura, area_pontos_altura)) {
+                posicao_pixel_x = BORDAS + rand() % (LARGURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
+                posicao_pixel_y = BORDAS + rand() % (ALTURA_TELA - 2 * BORDAS - TAMANHO_PIXEL);
             }
 
-            // Toca o som de coleta de pixel
             tocar_som_pixel();
         }
 
         ssd1306_fill(&display, false);
         desenhar_borda(&display, 0, 0, LARGURA_TELA, ALTURA_TELA, BORDAS);
         pisca_jogador = (tempo_imune > 0) && (((agora / 150) % 2) == 0);
-        if (!pisca_jogador) desenhar_retangulo(&display, pos_jogador_x, pos_jogador_y, TAM_JOGADOR, TAM_JOGADOR);
-        desenhar_retangulo(&display, pos_pixel_x, pos_pixel_y, TAM_PIXEL, TAM_PIXEL);
+        if (!pisca_jogador) desenhar_retangulo(&display, posicao_jogador_x, posicao_jogador_y, TAMANHO_JOGADOR, TAMANHO_JOGADOR);
+        desenhar_retangulo(&display, posicao_pixel_x, posicao_pixel_y, TAMANHO_PIXEL, TAMANHO_PIXEL);
         desenhar_pontuacao();
         desenhar_vidas();
         ssd1306_send_data(&display);
@@ -423,13 +411,12 @@ void iniciar_jogo() {
         sleep_ms(50);
 
         // Verifica manualmente o botão B se a interrupção não estiver funcionando
-        if (gpio_get(PINO_BOTAO) == 0) { // Se o botão estiver pressionado (ativo em baixo)
+        if (gpio_get(PINO_BOTAO) == 0) {
             uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
             if (agora_ms - ultimo_pulso_ms > 200) {
                 ultimo_pulso_ms = agora_ms;
                 fim_de_jogo = false;
-                jogo_iniciado = true;  // Garante que o jogo reinicie
-                // Atualiza LEDs para o novo estado
+                jogo_iniciado = true;
                 atualizar_leds();
             }
         }
@@ -450,28 +437,21 @@ int main() {
     ssd1306_config(&display);
     inicializar_matriz_led();
 
-    // Inicializa os LEDs de status
     inicializar_leds();
-
-    // Inicializa os buzzers
     inicializar_buzzers();
+    inicializar_botoes();
 
-    // Inicializa ambos os botões com um único sistema de interrupção
-    init_botoes();
-
-    // Loop principal para tela inicial
     while (!jogo_iniciado) {
         tela_inicial();
         mostrar_numero_vidas(MAX_VIDAS);
-        atualizar_leds();  // Garante que os LEDs estão no estado correto na tela inicial
+        atualizar_leds();
 
         // Verifica manualmente o botão B se a interrupção não estiver funcionando
-        if (gpio_get(PINO_BOTAO) == 0) { // Se o botão estiver pressionado (ativo em baixo)
+        if (gpio_get(PINO_BOTAO) == 0) {
             uint32_t agora_ms = to_ms_since_boot(get_absolute_time());
             if (agora_ms - ultimo_pulso_ms > 200) {
                 ultimo_pulso_ms = agora_ms;
                 jogo_iniciado = true;
-                // Atualiza LEDs para o novo estado
                 atualizar_leds();
             }
         }
