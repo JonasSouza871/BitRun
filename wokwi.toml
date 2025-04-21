@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = 'build/Coletor_Pixels.uf2'
+elf = 'build/Coletor_Pixels.elf'
